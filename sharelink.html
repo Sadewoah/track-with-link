@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tracking Link Generator</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>    <style>
+        .dark-theme {
+            --bg-primary: #1a1a1a;
+            --bg-secondary: #2d2d2d;
+            --text-primary: #e0e0e0;
+            --text-secondary: #a0a0a0;
+            --accent: #6366f1;
+            --accent-hover: #4f46e5;
+        }
+        body {
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+        }
+    </style>
+</head>
+<body class="dark-theme min-h-screen flex flex-col">
+    <header class="bg-gray-800 p-4 shadow-md">
+        <div class="container mx-auto">
+            <h1 class="text-2xl font-bold text-indigo-400">Tracking Link Generator</h1>
+            <p class="text-gray-400">Create links that track when they're opened and where from</p>
+        </div>
+    </header>
+
+    <main class="container mx-auto flex-grow p-4 md:p-6">
+        <div class="bg-gray-800 p-6 rounded-lg shadow-lg mb-8">
+            <h2 class="text-xl font-semibold mb-4 text-indigo-300">Create New Tracking Link</h2>
+            
+            <div class="mb-4">
+                <label for="destination-url" class="block text-gray-300 mb-2">Destination URL</label>
+                <input type="url" id="destination-url" placeholder="https://example.com" 
+                       class="w-full p-2 rounded bg-gray-700 border border-gray-600 text-white focus:outline-none focus:border-indigo-500">
+                <p class="text-sm text-gray-400 mt-1">This is where visitors will be redirected after tracking</p>
+            </div>
+            
+            <div class="mb-4">
+                <label for="link-name" class="block text-gray-300 mb-2">Campaign/Link Name (optional)</label>
+                <input type="text" id="link-name" placeholder="Spring Campaign" 
+                       class="w-full p-2 rounded bg-gray-700 border border-gray-600 text-white focus:outline-none focus:border-indigo-500">
+            </div>
+            
+            <button id="generate-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white py-2 px-4 rounded transition duration-200">
+                Generate Tracking Link
+            </button>
+        </div>
+        
+        <div id="result" class="hidden bg-gray-800 p-6 rounded-lg shadow-lg mb-8">
+            <h2 class="text-xl font-semibold mb-4 text-indigo-300">Your Tracking Link</h2>
+            
+            <div class="mb-4">
+                <label class="block text-gray-300 mb-2">Tracking Link</label>
+                <div class="flex">
+                    <input type="text" id="tracking-url" readonly
+                           class="flex-grow p-2 rounded-l bg-gray-700 border border-gray-600 text-white focus:outline-none focus:border-indigo-500">
+                    <button id="copy-btn" class="bg-gray-600 hover:bg-gray-700 text-white py-2 px-4 rounded-r transition duration-200">
+                        Copy
+                    </button>
+                </div>
+            </div>
+            
+            <p class="text-sm text-gray-400 mb-6">Share this link to track when it's opened and the visitor's approximate location</p>
+            
+            <h3 class="text-lg font-semibold mb-2 text-indigo-300">Link Statistics</h3>
+            <div id="link-stats" class="bg-gray-700 p-4 rounded">
+                <p class="text-gray-300">No data available yet. Statistics will appear here once your link is used.</p>
+            </div>
+        </div>
+        
+        <div class="bg-gray-800 p-6 rounded-lg shadow-lg">
+            <h2 class="text-xl font-semibold mb-4 text-indigo-300">Your Tracking Links</h2>
+            <div id="links-container" class="divide-y divide-gray-700">
+                <p class="text-gray-400 py-4">No tracking links created yet.</p>
+            </div>
+        </div>
+    </main>
+
+    <footer class="bg-gray-800 p-4 text-center text-gray-400 mt-8">
+        <p>For demonstration purposes only. Tracking is limited to information voluntarily shared by visitors.</p>
+    </footer>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Load existing links from localStorage
+            loadSavedLinks();
+            
+            // Setup event listeners
+            document.getElementById('generate-btn').addEventListener('click', generateTrackingLink);
+            document.getElementById('copy-btn').addEventListener('click', copyTrackingLink);
+            
+            // Function to generate tracking link
+            function generateTrackingLink() {
+                const destinationUrl = document.getElementById('destination-url').value.trim();
+                const linkName = document.getElementById('link-name').value.trim() || 'Unnamed Link';
+                
+                if (!destinationUrl || !isValidUrl(destinationUrl)) {
+                    alert('Please enter a valid destination URL');
+                    return;
+                }
+                
+                // Generate a unique tracking ID
+                const trackingId = generateUniqueId();
+                
+                // Create the tracking link
+                const trackingLink = `${window.location.origin}/track/${trackingId}`;
+                
+                // Save link details to localStorage
+                saveLinkDetails(trackingId, {
+                    name: linkName,
+                    destination: destinationUrl,
+                    created: new Date().toISOString(),
+                    clicks: [],
+                    trackingUrl: trackingLink
+                });
+                
+                // Update UI
+                document.getElementById('tracking-url').value = trackingLink;
+                document.getElementById('result').classList.remove('hidden');
+                
+                // Refresh the links list
+                loadSavedLinks();
+            }
+            
+            // Function to generate a unique ID
+            function generateUniqueId() {
+                const timestamp = new Date().getTime().toString();
+                const random = Math.random().toString();
+                return CryptoJS.MD5(timestamp + random).toString().substring(0, 12);
+            }
+            
+            // Function to save link details
+            function saveLinkDetails(id, details) {
+                let savedLinks = JSON.parse(localStorage.getItem('trackingLinks') || '{}');
+                savedLinks[id] = details;
+                localStorage.setItem('trackingLinks', JSON.stringify(savedLinks));
+            }
+            
+            // Function to load saved links
+            function loadSavedLinks() {
+                const savedLinks = JSON.parse(localStorage.getItem('trackingLinks') || '{}');
+                const linksContainer = document.getElementById('links-container');
+                
+                if (Object.keys(savedLinks).length === 0) {
+                    linksContainer.innerHTML = '<p class="text-gray-400 py-4">No tracking links created yet.</p>';
+                    return;
+                }
+                
+                let linksHtml = '';
+                
+                for (const [id, link] of Object.entries(savedLinks)) {
+                    const created = new Date(link.created).toLocaleDateString();
+                    const clickCount = link.clicks.length;
+                    
+                    linksHtml += `
+                    <div class="py-4" data-id="${id}">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <h3 class="font-medium text-indigo-300">${link.name}</h3>
+                                <p class="text-sm text-gray-400">Created: ${created}</p>
+                                <p class="text-sm text-gray-400">Destination: ${link.destination}</p>
+                                <p class="text-sm text-indigo-200">${clickCount} click(s)</p>
+                            </div>
+                            <div>
+                                <button class="view-stats-btn bg-gray-700 hover:bg-gray-600 text-white py-1 px-3 rounded text-sm mr-2" data-id="${id}">View Stats</button>
+                                <button class="delete-btn bg-red-700 hover:bg-red-600 text-white py-1 px-3 rounded text-sm" data-id="${id}">Delete</button>
+                            </div>
+                        </div>
+                        <div class="mt-2">
+                            <input type="text" value="${link.trackingUrl}" readonly class="w-full p-2 rounded bg-gray-700 border border-gray-600 text-white text-sm">
+                        </div>
+                    </div>`;
+                }
+                
+                linksContainer.innerHTML = linksHtml;
+                
+                // Add event listeners to the view stats and delete buttons
+                document.querySelectorAll('.view-stats-btn').forEach(btn => {
+                    btn.addEventListener('click', function() {
+                        viewLinkStats(this.getAttribute('data-id'));
+                    });
+                });
+                
+                document.querySelectorAll('.delete-btn').forEach(btn => {
+                    btn.addEventListener('click', function() {
+                        deleteLink(this.getAttribute('data-id'));
+                    });
+                });
+            }
+            
+            // Function to copy tracking link
+            function copyTrackingLink() {
+                const trackingUrl = document.getElementById('tracking-url');
+                trackingUrl.select();
+                document.execCommand('copy');
+                
+                const copyBtn = document.getElementById('copy-btn');
+                copyBtn.textContent = 'Copied!';
+                setTimeout(() => {
+                    copyBtn.textContent = 'Copy';
+                }, 2000);
+            }
+            
+            // Function to view link stats
+            function viewLinkStats(id) {
+                const savedLinks = JSON.parse(localStorage.getItem('trackingLinks') || '{}');
+                const link = savedLinks[id];
+                
+                if (!link) return;
+                
+                document.getElementById('tracking-url').value = link.trackingUrl;
+                document.getElementById('result').classList.remove('hidden');
+                
+                const stats = document.getElementById('link-stats');
+                if (link.clicks.length === 0) {
+                    stats.innerHTML = '<p class="text-gray-300">No data available yet. Statistics will appear here once your link is used.</p>';
+                    return;
+                }
+                
+                let statsHtml = `<h4 class="font-medium text-indigo-200 mb-2">${link.name} - Click Data</h4><div class="space-y-2">`;
+                
+                link.clicks.forEach((click, index) => {
+                    statsHtml += `
+                    <div class="bg-gray-800 p-2 rounded">
+                        <p class="text-sm"><span class="text-gray-400">Visit #${index + 1}:</span> ${new Date(click.timestamp).toLocaleString()}</p>
+                        <p class="text-sm"><span class="text-gray-400">IP:</span> ${click.ip || 'Unknown'}</p>
+                        <p class="text-sm"><span class="text-gray-400">Location:</span> ${click.location || 'Unknown'}</p>
+                        <p class="text-sm"><span class="text-gray-400">Device:</span> ${click.userAgent || 'Unknown'}</p>
+                    </div>`;
+                });
+                
+                statsHtml += '</div>';
+                stats.innerHTML = statsHtml;
+            }
+            
+            // Function to delete a link
+            function deleteLink(id) {
+                if (confirm('Are you sure you want to delete this tracking link?')) {
+                    let savedLinks = JSON.parse(localStorage.getItem('trackingLinks') || '{}');
+                    delete savedLinks[id];
+                    localStorage.setItem('trackingLinks', JSON.stringify(savedLinks));
+                    loadSavedLinks();
+                }
+            }
+            
+            // Function to validate URL
+            function isValidUrl(url) {
+                try {
+                    new URL(url);
+                    return true;
+                } catch (e) {
+                    return false;
+                }
+            }
+
+            // For demonstration purposes - Simulate receiving tracking data
+            window.simulateClick = function(trackingId) {
+                const savedLinks = JSON.parse(localStorage.getItem('trackingLinks') || '{}');
+                if (!savedLinks[trackingId]) return;
+                
+                const newClick = {
+                    timestamp: new Date().toISOString(),
+                    ip: '192.168.1.' + Math.floor(Math.random() * 255),
+                    location: 'New York, USA',
+                    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                };
+                
+                savedLinks[trackingId].clicks.push(newClick);
+                localStorage.setItem('trackingLinks', JSON.stringify(savedLinks));
+                
+                alert('New click recorded! View stats to see details.');
+            };
+        });
+    </script>
+</body>
+</html>
